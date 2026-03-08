@@ -27,6 +27,14 @@ export default function Game() {
     const g = gameRef.current;
     setUiState(prev => {
       if (prev.state === g.state && prev.score === g.score && prev.lives === g.lives && prev.wave === g.wave && prev.muted === g.muted) return prev;
+      // Save high score on game over
+      if (g.state === 'gameOver' && prev.state !== 'gameOver') {
+        const hs = getHighScore();
+        if (g.score > hs) {
+          setHighScore(g.score);
+          setHighScoreState(g.score);
+        }
+      }
       return { state: g.state, score: g.score, lives: g.lives, wave: g.wave, muted: g.muted };
     });
   }, []);
