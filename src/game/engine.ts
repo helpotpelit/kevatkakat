@@ -12,6 +12,7 @@ const POWERUP_SIZE = 28;
 const BASE_FIRE_RATE = 300;
 const BOOST_FIRE_RATE = 120;
 const MAX_WAVES = 5;
+const DEBUG_WAVES = false; // set to true for wave-completion debug logging
 
 export function getCanvasSize() {
   return { w: CANVAS_W, h: CANVAS_H };
@@ -179,7 +180,7 @@ export function update(game: GameData, dt: number, input: { left: boolean; right
 
   for (const b of bullets) {
     for (const e of enemies) {
-      if (!bulletsToRemove.has(b.id) && !enemiesToRemove.has(e.id) && rectsOverlap(b, e)) {
+      if (!bulletsToRemove.has(b.id) && !enemiesToRemove.has(e.id) && e.hp > 0 && rectsOverlap(b, e)) {
         bulletsToRemove.add(b.id);
         e.hp--;
         if (e.hp <= 0) {
@@ -191,7 +192,6 @@ export function update(game: GameData, dt: number, input: { left: boolean; right
           
           if (!muted) sounds.playHit();
 
-          // Chance to drop power-up
           if (Math.random() < 0.12) {
             const pType = Math.random() < 0.5 ? 'bag' : 'cleanup';
             powerUps.push({
@@ -204,7 +204,6 @@ export function update(game: GameData, dt: number, input: { left: boolean; right
             });
           }
         } else {
-          // Hit but not destroyed (frozen)
           particles.push(...spawnParticles(e.x + e.width / 2, e.y + e.height / 2, '#ADD8E6', 4));
         }
       }
@@ -212,7 +211,8 @@ export function update(game: GameData, dt: number, input: { left: boolean; right
   }
 
   bullets = bullets.filter(b => !bulletsToRemove.has(b.id));
-  enemies = enemies.filter(e => !enemiesToRemove.has(e.id));
+  // Remove dead enemies: both tracked Set AND any with hp <= 0 as safety net
+  enemies = enemies.filter(e => !enemiesToRemove.has(e.id) && e.hp > 0);
 
   // Move power-ups
   powerUps = powerUps.map(p => ({ ...p, y: p.y + 2 })).filter(p => p.y < CANVAS_H + 30);
@@ -223,20 +223,23 @@ export function update(game: GameData, dt: number, input: { left: boolean; right
       if (p.type === 'bag') {
         fireRateBoost = 5000;
       } else if (p.type === 'cleanup') {
-        // Destroy up to 5 random enemies
-        const toDestroy = enemies.slice(0, Math.min(5, enemies.length));
+        const alive = enemies.filter(e => e.hp > 0);
+        const toDestroy = alive.slice(0, Math.min(5, alive.length));
         for (const e of toDestroy) {
+          e.hp = 0;
           particles.push(...spawnParticles(e.x + e.width / 2, e.y + e.height / 2, '#8B6914', 6, '💩'));
           score += 10;
         }
-        const ids = new Set(toDestroy.map(e => e.id));
-        enemies = enemies.filter(e => !ids.has(e.id));
+        enemies = enemies.filter(e => e.hp > 0);
       }
       if (!muted) sounds.playPowerUp();
       return false;
     }
     return true;
   });
+
+  // Final safety: purge any dead enemies before wave check
+  enemies = enemies.filter(e => e.hp > 0);
 
   // Enemies reaching bottom
   const reachedBottom = enemies.some(e => e.y + e.height >= player.y);
@@ -247,7 +250,6 @@ export function update(game: GameData, dt: number, input: { left: boolean; right
       if (!muted) sounds.playGameOver();
       return { ...game, state: 'gameOver', score, lives: 0, particles };
     }
-    // Reset wave enemies positions
     return {
       ...game,
       ...spawnWave({ ...game, score, lives, wave }),
@@ -266,10 +268,13 @@ export function update(game: GameData, dt: number, input: { left: boolean; right
     life: p.life - 1,
   })).filter(p => p.life > 0);
 
-  // Wave complete check
-  if (enemies.length === 0) {
+  // Wave complete check — only when zero living enemies remain
+  const aliveEnemies = enemies.filter(e => e.hp > 0);
+  if (DEBUG_WAVES && enemies.length === 0) {
+    console.log(`[Wave Debug] enemies.length=${enemies.length}, alive=${aliveEnemies.length}, wave=${wave}`);
+  }
+  if (aliveEnemies.length === 0 && enemies.length === 0) {
     if (wave >= MAX_WAVES) {
-      // Game won!
       return { ...game, state: 'gameOver', score, lives, wave, particles, enemies: [], bullets: [] };
     }
     if (!muted) sounds.playWaveComplete();
