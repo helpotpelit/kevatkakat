@@ -32,6 +32,12 @@ jobs:
       - name: Verify dist
         run: ls -la ./dist
 
+      - name: List dist HTML files
+        run: find ./dist -type f -name "*.html"
+
+      - name: Show dist tree
+        run: find ./dist -type f | head -50
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
