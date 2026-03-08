@@ -18,16 +18,16 @@ export default function Game() {
   const inputRef = useRef({ left: false, right: false, shoot: false });
   const rafRef = useRef<number>(0);
   const [highScore, setHighScoreState] = useState(getHighScore());
+  const touchRef = useRef<{ startX: number; currentX: number; active: boolean }>({ startX: 0, currentX: 0, active: false });
 
-  const [uiState, setUiState] = useState<{ state: GameState; score: number; lives: number; wave: number; muted: boolean }>({
-    state: 'start', score: 0, lives: 3, wave: 1, muted: false,
+  const [uiState, setUiState] = useState<{ state: GameState; score: number; lives: number; wave: number; muted: boolean; fireRateBoost: number }>({
+    state: 'start', score: 0, lives: 3, wave: 1, muted: false, fireRateBoost: 0,
   });
 
   const syncUI = useCallback(() => {
     const g = gameRef.current;
     setUiState(prev => {
-      if (prev.state === g.state && prev.score === g.score && prev.lives === g.lives && prev.wave === g.wave && prev.muted === g.muted) return prev;
-      // Save high score on game over
+      if (prev.state === g.state && prev.score === g.score && prev.lives === g.lives && prev.wave === g.wave && prev.muted === g.muted && prev.fireRateBoost === g.fireRateBoost) return prev;
       if (g.state === 'gameOver' && prev.state !== 'gameOver') {
         const hs = getHighScore();
         if (g.score > hs) {
@@ -35,7 +35,7 @@ export default function Game() {
           setHighScoreState(g.score);
         }
       }
-      return { state: g.state, score: g.score, lives: g.lives, wave: g.wave, muted: g.muted };
+      return { state: g.state, score: g.score, lives: g.lives, wave: g.wave, muted: g.muted, fireRateBoost: g.fireRateBoost };
     });
   }, []);
 
@@ -55,6 +55,23 @@ export default function Game() {
     canvas.width = GAME_W * scale * window.devicePixelRatio;
     canvas.height = GAME_H * scale * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    // Auto-fire while playing
+    if (gameRef.current.state === 'playing') {
+      inputRef.current.shoot = true;
+    }
+
+    // Touch drag movement
+    if (touchRef.current.active) {
+      const delta = touchRef.current.currentX - touchRef.current.startX;
+      const threshold = 8;
+      inputRef.current.left = delta < -threshold;
+      inputRef.current.right = delta > threshold;
+      // Update start position for continuous dragging
+      if (Math.abs(delta) > threshold) {
+        touchRef.current.startX = touchRef.current.currentX;
+      }
+    }
 
     gameRef.current = update(gameRef.current, 16, inputRef.current);
     render(ctx, gameRef.current, scale);
@@ -85,8 +102,51 @@ export default function Game() {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, []);
 
+  // Touch controls - drag to move
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      touchRef.current = { startX: touch.clientX, currentX: touch.clientX, active: true };
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (touchRef.current.active) {
+        touchRef.current.currentX = e.touches[0].clientX;
+      }
+    };
+    const handleTouchEnd = (e: TouchEvent) => {
+      e.preventDefault();
+      touchRef.current.active = false;
+      inputRef.current.left = false;
+      inputRef.current.right = false;
+    };
+
+    const el = document.getElementById('game-touch-zone');
+    if (el) {
+      el.addEventListener('touchstart', handleTouchStart, { passive: false });
+      el.addEventListener('touchmove', handleTouchMove, { passive: false });
+      el.addEventListener('touchend', handleTouchEnd, { passive: false });
+      el.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    }
+    return () => {
+      if (el) {
+        el.removeEventListener('touchstart', handleTouchStart);
+        el.removeEventListener('touchmove', handleTouchMove);
+        el.removeEventListener('touchend', handleTouchEnd);
+        el.removeEventListener('touchcancel', handleTouchEnd);
+      }
+    };
+  }, []);
+
+  // Prevent page scroll
+  useEffect(() => {
+    const prevent = (e: TouchEvent) => e.preventDefault();
+    document.addEventListener('touchmove', prevent, { passive: false });
+    return () => document.removeEventListener('touchmove', prevent);
+  }, []);
+
   const startGame = useCallback(() => {
-    // Save high score from previous game if any
     const prevScore = gameRef.current.score;
     if (prevScore > highScore) {
       setHighScore(prevScore);
@@ -110,29 +170,26 @@ export default function Game() {
     syncUI();
   }, [syncUI]);
 
-  const touchStart = (action: 'left' | 'right' | 'shoot') => {
-    inputRef.current[action] = true;
-  };
-  const touchEnd = (action: 'left' | 'right' | 'shoot') => {
-    inputRef.current[action] = false;
-  };
-
-  const { state, score, lives, wave, muted } = uiState;
+  const { state, score, lives, wave, muted, fireRateBoost } = uiState;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-spring-sky select-none overflow-hidden">
-      {/* HUD */}
-      <div className="w-full max-w-[420px] flex items-center justify-between px-3 py-2 font-display text-sm font-bold text-foreground">
+    <div
+      className="flex flex-col items-center justify-center min-h-screen bg-spring-sky select-none overflow-hidden"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {/* Compact HUD */}
+      <div className="w-full max-w-[420px] flex items-center justify-between px-3 py-1 font-display text-xs font-bold text-foreground"
+           style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <span>❤️ {lives}</span>
         <span>Aalto {wave}/5</span>
         <span>⭐ {score}</span>
         <button onClick={toggleMute} className="p-1 rounded-lg bg-card/60 backdrop-blur">
-          {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
         </button>
       </div>
 
       {/* Canvas */}
-      <div className="relative w-full max-w-[420px] aspect-[2/3] rounded-2xl overflow-hidden shadow-xl border-2 border-primary/30">
+      <div className="relative w-full max-w-[420px] flex-1 rounded-2xl overflow-hidden shadow-xl border-2 border-primary/30">
         <canvas
           ref={canvasRef}
           className="w-full h-full block"
@@ -143,8 +200,11 @@ export default function Game() {
         {state === 'start' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-foreground/40 backdrop-blur-sm">
             <h1 className="text-5xl font-display font-bold text-secondary drop-shadow-lg mb-2">Kevätkakat</h1>
-            <p className="text-primary-foreground font-body text-base mb-4 text-center px-4 drop-shadow">
+            <p className="text-primary-foreground font-body text-base mb-2 text-center px-4 drop-shadow">
               Pelasta puisto kevään ylläreiltä
+            </p>
+            <p className="text-primary-foreground/60 font-body text-xs mb-4 text-center px-6 drop-shadow">
+              Vedä sormea vasemmalle/oikealle liikkuaksesi. Ammunta on automaattista!
             </p>
             {highScore > 0 && (
               <p className="text-primary-foreground/80 font-body text-sm mb-4 drop-shadow">🏆 Ennätys: {highScore}</p>
@@ -193,47 +253,26 @@ export default function Game() {
             </button>
           </div>
         )}
-      </div>
 
-      {/* Touch controls */}
-      <div className="w-full max-w-[420px] flex items-center justify-between gap-2 mt-3 px-2">
-        <div className="flex gap-2">
-          <button
-            onTouchStart={() => touchStart('left')}
-            onTouchEnd={() => touchEnd('left')}
-            onMouseDown={() => touchStart('left')}
-            onMouseUp={() => touchEnd('left')}
-            onMouseLeave={() => touchEnd('left')}
-            className="w-16 h-16 rounded-2xl bg-primary/80 text-primary-foreground text-2xl font-bold shadow-md active:scale-90 transition-transform select-none"
-          >
-            ◀
-          </button>
-          <button
-            onTouchStart={() => touchStart('right')}
-            onTouchEnd={() => touchEnd('right')}
-            onMouseDown={() => touchStart('right')}
-            onMouseUp={() => touchEnd('right')}
-            onMouseLeave={() => touchEnd('right')}
-            className="w-16 h-16 rounded-2xl bg-primary/80 text-primary-foreground text-2xl font-bold shadow-md active:scale-90 transition-transform select-none"
-          >
-            ▶
-          </button>
-        </div>
-        <button
-          onTouchStart={() => touchStart('shoot')}
-          onTouchEnd={() => touchEnd('shoot')}
-          onMouseDown={() => touchStart('shoot')}
-          onMouseUp={() => touchEnd('shoot')}
-          onMouseLeave={() => touchEnd('shoot')}
-          className="w-20 h-16 rounded-2xl bg-secondary text-secondary-foreground text-lg font-display font-bold shadow-md active:scale-90 transition-transform select-none"
+        {/* Touch control zone - bottom 30% */}
+        <div
+          id="game-touch-zone"
+          className="absolute bottom-0 left-0 right-0 pointer-events-auto"
+          style={{ height: '30%', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          🌿 Ammu
-        </button>
+          {/* Subtle indicator line */}
+          <div className="absolute top-0 left-4 right-4 h-px bg-primary-foreground/15 rounded-full" />
+          {state === 'playing' && (
+            <p className="absolute top-2 left-0 right-0 text-center text-primary-foreground/30 font-body text-[10px] pointer-events-none select-none">
+              ← vedä liikkuaksesi →
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Fire rate boost indicator */}
-      {uiState.state === 'playing' && gameRef.current.fireRateBoost > 0 && (
-        <div className="mt-2 px-3 py-1 bg-secondary/80 rounded-full font-body text-sm text-secondary-foreground font-bold animate-pulse">
+      {state === 'playing' && fireRateBoost > 0 && (
+        <div className="mt-1 px-3 py-0.5 bg-secondary/80 rounded-full font-body text-xs text-secondary-foreground font-bold animate-pulse">
           ⚡ Tulinopeus!
         </div>
       )}
