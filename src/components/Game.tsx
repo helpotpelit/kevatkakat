@@ -165,9 +165,15 @@ export default function Game() {
               {lives > 0 ? '🎉 Voitit pelin!' : 'Kevät voitti tällä kertaa'}
             </p>
             <p className="text-primary-foreground font-body text-xl mb-1 drop-shadow">Pisteet: {score}</p>
+            {score >= highScore && score > 0 && (
+              <p className="text-secondary font-display font-bold text-lg mb-1 drop-shadow animate-pulse">🏆 Uusi ennätys!</p>
+            )}
+            {highScore > 0 && score < highScore && (
+              <p className="text-primary-foreground/70 font-body text-sm mb-1 drop-shadow">Ennätys: {highScore}</p>
+            )}
             <button
               onClick={startGame}
-              className="mt-6 px-8 py-3 bg-secondary text-secondary-foreground font-display font-bold text-lg rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform"
+              className="mt-4 px-8 py-3 bg-secondary text-secondary-foreground font-display font-bold text-lg rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform"
             >
               🔄 Pelaa uudelleen
             </button>
