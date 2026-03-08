@@ -5,11 +5,19 @@ import { Volume2, VolumeX } from 'lucide-react';
 
 const { w: GAME_W, h: GAME_H } = getCanvasSize();
 
+function getHighScore(): number {
+  try { return parseInt(localStorage.getItem('kevatkakat_highscore') || '0', 10) || 0; } catch { return 0; }
+}
+function setHighScore(s: number) {
+  try { localStorage.setItem('kevatkakat_highscore', String(s)); } catch {}
+}
+
 export default function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<GameData>(createInitialState());
   const inputRef = useRef({ left: false, right: false, shoot: false });
   const rafRef = useRef<number>(0);
+  const [highScore, setHighScoreState] = useState(getHighScore());
 
   const [uiState, setUiState] = useState<{ state: GameState; score: number; lives: number; wave: number; muted: boolean }>({
     state: 'start', score: 0, lives: 3, wave: 1, muted: false,
@@ -19,6 +27,14 @@ export default function Game() {
     const g = gameRef.current;
     setUiState(prev => {
       if (prev.state === g.state && prev.score === g.score && prev.lives === g.lives && prev.wave === g.wave && prev.muted === g.muted) return prev;
+      // Save high score on game over
+      if (g.state === 'gameOver' && prev.state !== 'gameOver') {
+        const hs = getHighScore();
+        if (g.score > hs) {
+          setHighScore(g.score);
+          setHighScoreState(g.score);
+        }
+      }
       return { state: g.state, score: g.score, lives: g.lives, wave: g.wave, muted: g.muted };
     });
   }, []);
@@ -70,11 +86,17 @@ export default function Game() {
   }, []);
 
   const startGame = useCallback(() => {
+    // Save high score from previous game if any
+    const prevScore = gameRef.current.score;
+    if (prevScore > highScore) {
+      setHighScore(prevScore);
+      setHighScoreState(prevScore);
+    }
     const g = createInitialState();
     g.state = 'playing';
     gameRef.current = spawnWave(g);
     syncUI();
-  }, [syncUI]);
+  }, [syncUI, highScore]);
 
   const nextWave = useCallback(() => {
     const g = gameRef.current;
@@ -121,9 +143,12 @@ export default function Game() {
         {state === 'start' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-foreground/40 backdrop-blur-sm">
             <h1 className="text-5xl font-display font-bold text-secondary drop-shadow-lg mb-2">Kevätkakat</h1>
-            <p className="text-primary-foreground font-body text-base mb-8 text-center px-4 drop-shadow">
+            <p className="text-primary-foreground font-body text-base mb-4 text-center px-4 drop-shadow">
               Pelasta puisto kevään ylläreiltä
             </p>
+            {highScore > 0 && (
+              <p className="text-primary-foreground/80 font-body text-sm mb-4 drop-shadow">🏆 Ennätys: {highScore}</p>
+            )}
             <button
               onClick={startGame}
               className="px-8 py-3 bg-primary text-primary-foreground font-display font-bold text-xl rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform"
@@ -154,9 +179,15 @@ export default function Game() {
               {lives > 0 ? '🎉 Voitit pelin!' : 'Kevät voitti tällä kertaa'}
             </p>
             <p className="text-primary-foreground font-body text-xl mb-1 drop-shadow">Pisteet: {score}</p>
+            {score >= highScore && score > 0 && (
+              <p className="text-secondary font-display font-bold text-lg mb-1 drop-shadow animate-pulse">🏆 Uusi ennätys!</p>
+            )}
+            {highScore > 0 && score < highScore && (
+              <p className="text-primary-foreground/70 font-body text-sm mb-1 drop-shadow">Ennätys: {highScore}</p>
+            )}
             <button
               onClick={startGame}
-              className="mt-6 px-8 py-3 bg-secondary text-secondary-foreground font-display font-bold text-lg rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform"
+              className="mt-4 px-8 py-3 bg-secondary text-secondary-foreground font-display font-bold text-lg rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform"
             >
               🔄 Pelaa uudelleen
             </button>
