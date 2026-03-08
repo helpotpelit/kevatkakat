@@ -78,11 +78,17 @@ export default function Game() {
   }, []);
 
   const startGame = useCallback(() => {
+    // Save high score from previous game if any
+    const prevScore = gameRef.current.score;
+    if (prevScore > highScore) {
+      setHighScore(prevScore);
+      setHighScoreState(prevScore);
+    }
     const g = createInitialState();
     g.state = 'playing';
     gameRef.current = spawnWave(g);
     syncUI();
-  }, [syncUI]);
+  }, [syncUI, highScore]);
 
   const nextWave = useCallback(() => {
     const g = gameRef.current;
