@@ -12,6 +12,7 @@ const POWERUP_SIZE = 28;
 const BASE_FIRE_RATE = 300;
 const BOOST_FIRE_RATE = 120;
 const MAX_WAVES = 5;
+const DEBUG_WAVES = false; // set to true for wave-completion debug logging
 
 export function getCanvasSize() {
   return { w: CANVAS_W, h: CANVAS_H };
