@@ -129,9 +129,12 @@ export default function Game() {
         {state === 'start' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-foreground/40 backdrop-blur-sm">
             <h1 className="text-5xl font-display font-bold text-secondary drop-shadow-lg mb-2">Kevätkakat</h1>
-            <p className="text-primary-foreground font-body text-base mb-8 text-center px-4 drop-shadow">
+            <p className="text-primary-foreground font-body text-base mb-4 text-center px-4 drop-shadow">
               Pelasta puisto kevään ylläreiltä
             </p>
+            {highScore > 0 && (
+              <p className="text-primary-foreground/80 font-body text-sm mb-4 drop-shadow">🏆 Ennätys: {highScore}</p>
+            )}
             <button
               onClick={startGame}
               className="px-8 py-3 bg-primary text-primary-foreground font-display font-bold text-xl rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform"
