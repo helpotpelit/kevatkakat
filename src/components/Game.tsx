@@ -5,11 +5,19 @@ import { Volume2, VolumeX } from 'lucide-react';
 
 const { w: GAME_W, h: GAME_H } = getCanvasSize();
 
+function getHighScore(): number {
+  try { return parseInt(localStorage.getItem('kevatkakat_highscore') || '0', 10) || 0; } catch { return 0; }
+}
+function setHighScore(s: number) {
+  try { localStorage.setItem('kevatkakat_highscore', String(s)); } catch {}
+}
+
 export default function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<GameData>(createInitialState());
   const inputRef = useRef({ left: false, right: false, shoot: false });
   const rafRef = useRef<number>(0);
+  const [highScore, setHighScoreState] = useState(getHighScore());
 
   const [uiState, setUiState] = useState<{ state: GameState; score: number; lives: number; wave: number; muted: boolean }>({
     state: 'start', score: 0, lives: 3, wave: 1, muted: false,
